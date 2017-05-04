@@ -120,8 +120,9 @@ class lvyoutube extends oxBase {
         $aLvApiChannelIds                   = $this->_oLvConfig->getConfigParam('aLvApiChannelIds');
         $blLvTitleCheck                     = $this->_oLvConfig->getConfigParam('blLvTitleCheck');
         
-        // channelid is optional. If empty fill with empty dummy value
-        if (!$aLvApiChannelIds || count($aLvApiChannelIds)) {
+        // channelid is optional. If empty fill with empty dummy value so we go through
+        // at least once
+        if (!$aLvApiChannelIds || count($aLvApiChannelIds) == 0) {
             $aLvApiChannelIds = array('');
         }
         
@@ -138,19 +139,12 @@ class lvyoutube extends oxBase {
                     $sVideoId       = (string)$aVideoInfo['id']['videoId'];
                     $sVideoTitle    = $this->_lvGetNormalizedName((string)$aVideoInfo['snippet']['title']);
                     $sProductTitle  = $this->_lvGetProductTitle($sOxid);
-                    
+
+                    $blVideoTitleValid = true;
                     if ($blLvTitleCheck) {
-                        if (stripos($sVideoTitle, $sProductTitle) !== false) {
-                            $blVideoTitleValid = true;
-                        }
-                        else {
-                            $blVideoTitleValid = false;
-                        }
+                        $blVideoTitleValid = (stripos($sVideoTitle, $sProductTitle) !== false) ? true: false;
                     }
-                    else {
-                        $blVideoTitleValid = true;
-                    }
-                    
+
                     if ($sVideoId != '' && $blVideoTitleValid) {
                         $this->_lvAddVideoUrlToProduct($sOxid, $sVideoId, $sVideoTitle);
                         $blMatch = true;
@@ -227,35 +221,58 @@ class lvyoutube extends oxBase {
         $sTitle = $this->_oLvDb->GetOne($sQuery);
 
         if (!$sTitle) {
-            // try to fetch title from parent
-            $sQuery = "
-                SELECT OXPARENTID
-                FROM 
-                    oxarticles
-                WHERE 
-                    OXID = '".$sOxid."'
-            ";
-            $sParentOxid = $this->_oLvDb->GetOne($sQuery);
-
-            $sQuery = "
-                SELECT OXTITLE
-                FROM 
-                    oxarticles
-                WHERE 
-                    OXID = '".$sParentOxid."'
-            ";
-            $sTitle = $this->_oLvDb->GetOne($sQuery);
+            $sTitle = $this->_lvGetParentProductTitle($sOxid);
         }
-        
+
+        $sTitle = $this->_lvCleanupTitle($sTitle);
+
+        return $sTitle;
+    }
+
+    /**
+     * Method removes configured strings from title and do some normalization/equalization work
+     *
+     * @param string $sTitle
+     * @return string
+     */
+    protected function _lvCleanupTitle($sTitle) {
         $aLvTitleRemove = $this->_oLvConfig->getConfigParam('aLvTitleRemove');
         if ($aLvTitleRemove && is_array($aLvTitleRemove) && count($aLvTitleRemove) > 0) {
             foreach ($aLvTitleRemove as $sCurrentRemoval) {
                 $sTitle = str_replace($sCurrentRemoval, "", $sTitle);
             }
         }
-        
         $sTitle = $this->_lvGetNormalizedName((string)$sTitle);
-        
+
+        return (string)$sTitle;
+    }
+
+    /**
+     * Returns the parents product title of an oxid
+     *
+     * @param string $sOxid
+     * @return string
+     */
+    protected function _lvGetParentProductTitle($sOxid) {
+        // try to fetch title from parent
+        $sQuery = "
+                SELECT OXPARENTID
+                FROM 
+                    oxarticles
+                WHERE 
+                    OXID = '".$sOxid."'
+            ";
+        $sParentOxid = $this->_oLvDb->GetOne($sQuery);
+
+        $sQuery = "
+                SELECT OXTITLE
+                FROM 
+                    oxarticles
+                WHERE 
+                    OXID = '".$sParentOxid."'
+            ";
+        $sTitle = $this->_oLvDb->GetOne($sQuery);
+
         return $sTitle;
     }
     
@@ -374,7 +391,7 @@ class lvyoutube extends oxBase {
             $sLvApiRequestPrefix                = $this->_oLvConfig->getConfigParam('sLvApiRequestPrefix');
             $sLvApiRequestSuffix                = $this->_oLvConfig->getConfigParam('sLvApiRequestSuffix');
             
-            $sRequestUrl     = $sLvApiBaseRequestAddress.$sLvApiRequestAction."?part=".$sLvApiRequestPart;
+            $sRequestUrl = $sLvApiBaseRequestAddress.$sLvApiRequestAction."?part=".$sLvApiRequestPart;
             if ($sLvApiRequestMaxResults && $sLvApiRequestMaxResults != '' && is_numeric($sLvApiRequestMaxResults)) {
                 $sRequestUrl    .= "&maxResults=".trim($sLvApiRequestMaxResults);
             }
