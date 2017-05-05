@@ -43,6 +43,8 @@ $aModule = array(
     ),
     'files' => array(
         'lvyoutube' => 'lv/lvYouTubeProductVideo/application/models/lvyoutube.php',
+        // core
+        'lvyoutubeevents' => 'lv/lvYouTubeProductVideo/core/lvyoutubeevents.php',
     ),
     'events'       => array(
         'onActivate' => 'lvyoutubeevents::onActivate',
